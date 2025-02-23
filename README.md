@@ -1,8 +1,8 @@
 Положить ключ:
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"key": "age", "value": "23"}' http://localhost:8080/api/add
+curl -X POST "http://localhost:8080/api/put?key=age&value=23"
 ```
 Достать по ключу:
 ```
-curl -X GET http://localhost:8080/api/get/age
+curl -X GET "http://localhost:8080/api/get?key=age"
 ```
