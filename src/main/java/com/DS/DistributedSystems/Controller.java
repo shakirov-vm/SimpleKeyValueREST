@@ -6,7 +6,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api")
 public class Controller {
 
-    private final Storage storage = new Storage();
+//    private final Storage storage = new InMemoryNonConcurrentStorage();
+//    private final Storage storage = new InMemoryConcurrentStorage();
+    private final Storage storage = new DockerPostgreSQLStorage();
 
     @PostMapping("/put")
     public String put(@RequestParam String key, @RequestParam String value) {
