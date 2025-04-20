@@ -52,3 +52,39 @@ Get:
 ![ConcurrentGet1Thread.png](Other/NewMeasures/ConcurrentGet1Thread.png)
 Post:
 ![ConcurrentPost1Thread.png](Other/NewMeasures/ConcurrentPost1Thread.png)
+
+Дальше только get:
+
+Для примера JMeter Postgresql, со стандартными настройками Postgresql (с контроллером DockerPostgreSQLStorage):
+с 1 потоком - 1700 TPS
+![OneThread.png](Other/One-To-Many-Measures/OneThread.png)
+с 2 потоками - 2915 TPS
+![TwoThread.png](Other/One-To-Many-Measures/TwoThread.png)
+с 5 потоками - 2920 TPS
+![FiveThread.png](Other/One-To-Many-Measures/FiveThread.png)
+с 25 потоками - 3030 TPS
+![Thread25.png](Other/One-To-Many-Measures/Thread25.png)
+Видим очень жесткое ограничение по TPS, судя по всему это происходит из-за того, что всего одно подключение к Postgresql на все потоки, естественно, concurrency там особого не получается.
+Сначала пробуем открывать соединение в начале каждого get; это очень плохая идея, на 1 поток около 75 транзакций получается (такое стыдно скриншотить), это можно использовать разве что для измерения времени открытие соединения + его закрытие.
+Однако мы понимаем, что упираемся в отсутствие concurrency из-за одного соединения, поэтому есть решение - пул соединений с помощью HikariCP.
+Делаем пул соединений в Java-приложении, используем HikariCPDockerPostgreSQLStorage()
+с 1 потоком - 1730 TPS
+![HikariOneThread.png](Other/One-To-Many-Measures/HikariOneThread.png)
+с 2 потоками - 2915 TPS
+![HikariTwoThread.png](Other/One-To-Many-Measures/HikariTwoThread.png)
+с 5 потоками - 8100 TPS
+![HikariFiveThread.png](Other/One-To-Many-Measures/HikariFiveThread.png)
+с 25 потоками - 17300 TPS
+![Hikari25Thread.png](Other/One-To-Many-Measures/Hikari25Thread.png)
+с 75 потоками - 15800 TPS
+![Hikari75Thread.png](Other/One-To-Many-Measures/Hikari75Thread.png)
+Видим высокую утилизацию CPU, что мы и хотели получить, 16000 TPS Postgresql на чтение вполне себе выдает.
+Заметим, что тут нет особо смысла пытаться настроить max_connections внутри postgres, потому оно равно 100:
+```
+docker exec -it java_postgres psql -U postgres -c "SHOW max_connections;"
+ max_connections 
+-----------------
+ 100
+(1 row)
+```
+А так как 100 > 75, то мы просто напросто не упираемся в этот предел, нет смысла увеличивать это число.

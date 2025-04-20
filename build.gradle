@@ -23,6 +23,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	implementation 'org.postgresql:postgresql:42.6.0'
+	implementation 'com.zaxxer:HikariCP:5.1.0'
 }
 
 tasks.named('test') {
