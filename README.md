@@ -88,3 +88,77 @@ docker exec -it java_postgres psql -U postgres -c "SHOW max_connections;"
 (1 row)
 ```
 А так как 100 > 75, то мы просто напросто не упираемся в этот предел, нет смысла увеличивать это число.
+
+# Шардирование
+Прежде всего попробуем локально поднять 2 экземпляра postgresql:
+```
+docker run -it --name java_postgres1 \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=mysecretpassword \
+    -e POSTGRES_DB=java_db1 \
+    -p 5432:5432 \
+    postgres
+
+docker run -it --name java_postgres2 \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=mysecretpassword \
+    -e POSTGRES_DB=java_db2 \
+    -p 5433:5432 \
+    postgres
+```
+С помощью этого можно протестировать класс ShardHikariCPDockerPostgreSQLStorage.
+А теперь перейдем к организации настоящего шардирования. Арендуем сервера на cloud.ru. Два сервера (ip устареют к моменту выкладки):
+ShardJavaPostgresql1: ip - 176.108.253.103
+ShardJavaPostgresql2: ip - 88.218.67.165
+Конфигурация у них следующая:
+![Снимок экрана от 2025-04-26 23-12-32.png](Other/Sharding/%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%20%D0%BE%D1%82%202025-04-26%2023-12-32.png)
+На каждом сервере накачена Ubuntu 22.04, на каждую установлен postgresql
+Настройки:
+1) Начинаем с того, что делаем ssh пару
+2) В /etc/ssh/sshd_config (и в подключенные файлы) докинем `PasswordAuthentication yes`, пусть будет
+3) Дописываем:
+  sudo nano /etc/postgresql/14/main/postgresql.conf
+    listen_addresses = '*'
+4) Дописываем:
+  sudo nano /etc/postgresql/14/main/pg_hba.conf
+    host  all  all  0.0.0.0/0  md5
+5) Настраиваем файервол (хоть вроде он и выключен):
+   sudo ufw allow 5432/tcp
+6) Заходим в postgresql и создаем базу данных, устанавливаем наш пароль:
+   sudo -u postgres psql
+   postgres=# CREATE DATABASE java_db1;
+   postgres=# ALTER USER postgres WITH PASSWORD 'mysecretpassword';
+7) Видим, что подключиться через telnet на 5432 порт всё равно нельзя; может это ограничение провайдера, поэтому делаем такой хак:
+   ssh -L 5433:localhost:5432 user1@88.218.67.165
+   ssh -L 5434:localhost:5432 user1@176.108.253.103
+8) Теперь мы можем подключаться к удаленным серверам через localhost
+## Тестирование шардирования
+План тестирования следующий: взять 2 ключа, которые попадут сначала на первый сервер, потом 2, которые попадут на второй, потом 2 таких, что один попадает на первый, другой на второй - тут мы должны увидеть пропускную способность как сумму двух предыдущих.
+Добавим в jmeter в Thread Group: CSV Data Set Config - будем держать там по 2 ключа, соответственно, для каждой из трех ситуаций свои
+Для сервера 1 ключи: age1 и age3
+Для сервера 2 ключи: age и age2
+Не забудем увеличить shardXConfig.setMaximumPoolSize до 50
+Не забываем также посмотреть, что max_connections в Postgresql больше, чем пул соединений в нашем Java-приложении:
+```
+postgres=# SHOW max_connections;
+max_connections
+-----------------
+100
+(1 row)
+```
+Не удалось загрузить удаленные сервера на 100%, сделаем их послабее, пересоздадим с 1 vCPU и 2 ГБ RAM.
+Переустанавливаем заново:
+```
+sudo apt update && sudo apt upgrade -y
+sudo apt install postgresql postgresql-contrib -y
+sudo systemctl status postgresql
+```
+Сервера пока не работают:
+```
+user1@javashard1:~$ sudo systemctl status postgresql
+● postgresql.service - PostgreSQL RDBMS
+     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled; vendor preset: enabled)
+     Active: active (exited) since Sun 2025-04-27 18:27:51 MSK; 44s ago
+    Process: 29713 ExecStart=/bin/true (code=exited, status=0/SUCCESS)
+   Main PID: 29713 (code=exited, status=0/SUCCESS)
+```

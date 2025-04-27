@@ -10,7 +10,9 @@ public class Controller {
 //    private final Storage storage = new InMemoryConcurrentStorage();
 //    private final Storage storage = new DockerPostgreSQLStorage();
 //    private final Storage storage = new MultiThreadDockerPostgreSQLStorage();
-    private final Storage storage = new HikariCPDockerPostgreSQLStorage();
+//    private final Storage storage = new HikariCPDockerPostgreSQLStorage();
+//    private final Storage storage = new ShardHikariCPDockerPostgreSQLStorage();
+    private final Storage storage = new RemoteShardHikariCPDockerPostgreSQLStorage();
 
     @PostMapping("/put")
     public String put(@RequestParam String key, @RequestParam String value) {
