@@ -149,7 +149,7 @@ max_connections
 Не удалось загрузить удаленные сервера на 100%, сделаем их послабее, пересоздадим с 1 vCPU и 2 ГБ RAM.
 Переустанавливаем заново:
 ```
-sudo apt update && sudo apt upgrade -y
+sudo apt update
 sudo apt install postgresql postgresql-contrib -y
 sudo systemctl status postgresql
 ```
@@ -162,3 +162,17 @@ user1@javashard1:~$ sudo systemctl status postgresql
     Process: 29713 ExecStart=/bin/true (code=exited, status=0/SUCCESS)
    Main PID: 29713 (code=exited, status=0/SUCCESS)
 ```
+Ладно, на самом деле смотреть надо было через
+```
+systemctl status postgresql@16-main.service
+```
+Ну и переустановили ОС на виртуалках на Ubuntu24, теперь всё работает.
+Вспоминаем, что на каждая текущая машина - 1 vCPU, 2 GB RAM, 10% гарантированногго времени. Запускать будем по 50 потоков в Apache JMeter, этого хватает для полной нагрузки (и это < 50% моего локального CPU, что радует).
+Начнем с ключей age и age2
+![Shard1.png](Other/Sharding/Shard1.png)
+Затем age1 и age2:
+![Shard2.png](Other/Sharding/Shard2.png)
+А теперь разные ключи:
+![Both.png](Other/Sharding/Both.png)
+Видим, что шарды выдают честные 3800 и 3730 TPS, и достаточно подгружены оба (по 80%), а при одновременном задействовании обоих получаем уже 7300 TPS, что примерно равно сумме этих TPS (с той же подгруженностью в 80%, видимо это какая-то особенность отображения).
+Вспоминая, что во всех тестах было по 50 потоков в JMeter - делаем вывод, что шардирование действительно дало нам масштабирование в раза на нашем тестовом сценарии.
